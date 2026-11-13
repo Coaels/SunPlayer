@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="assets/sunplayer-logo.png" alt="SunPlayer" width="160">
-</p>
 
-<h1 align="center">SunPlayer</h1>
 
 <p align="center"><b>假人玩家插件，支持 Paper / Folia 1.21.11</b></p>
 
