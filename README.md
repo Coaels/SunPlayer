@@ -1,6 +1,10 @@
-# SunPlayer
+<p align="center">
+  <img src="assets/sunplayer-logo.png" alt="SunPlayer" width="160">
+</p>
 
-**假人玩家插件，支持 Paper / Folia 1.21.11**
+<h1 align="center">SunPlayer</h1>
+
+<p align="center"><b>假人玩家插件，支持 Paper / Folia 1.21.11</b></p>
 
 这个插件能在服务器里凭空生成一个“玩家”。它会挂机、保持区块加载、会被水冲走、被活塞推动、被打、也会掉东西，行为跟真玩家没什么区别。也可以把它摆成 NPC：玩家点一下，就执行你设置好的命令。
 
@@ -196,7 +200,7 @@ compat:
 
 ---
 
-# SunPlayer
+## SunPlayer
 
 **Fake player plugin, supports Paper / Folia 1.21.11**
 
