@@ -1,0 +1,60 @@
+# SunPlayer 假人名字敏感词过滤
+#
+# 只在"创建假人"时检查，NPC（--npcmode）不受影响：
+# NPC 需要 sunplayer.npc（默认只有 OP），是管理员放的装饰，不该被公共词表挡住。
+#
+# 匹配规则（大小写不敏感，并且忽略 _ - . 空格 和数字，防止用 b.o.t 之类的方式绕过）：
+#   match: contains   名字里"包含"任一词就拒绝（默认，推荐）
+#   match: whole      整个名字必须"等于"某个词才拒绝（词表里有很短的词时用它，避免误伤 Steve 里的 "eve"）
+#
+# words 下面一行一个词。以 # 开头的行是注释。
+# 改完执行 /sunplayer reload 立即生效，不用重启。
+
+enabled: true
+match: contains
+
+words:
+  # ---- 默认示例：按需删改 ----
+  - fuck
+  - fuckyou
+  - shit
+  - bitch
+  - cunt
+  - asshole
+  - nigga
+  - nigger
+  - retard
+  - faggot
+  - sex
+  - porn
+  - nsfw
+  - titties
+  - penis
+  - vagina
+  - 傻逼
+  - 煞笔
+  - 沙比
+  - 傻b
+  - 操你
+  - 草泥马
+  - 你妈
+  - 尼玛
+  - 日你
+  - 婊子
+  - 贱人
+  - 骚逼
+  - 鸡巴
+  - 肉棒
+  - 卖片
+  - 看片
+  - 加微信
+  - 加qq
+  - 代充
+  - 代练
+  - 外挂
+  - 开挂
+  - 刷钻
+  - 充值
+  - 打钱
+
+  # ---- 自定义：往下加 ----

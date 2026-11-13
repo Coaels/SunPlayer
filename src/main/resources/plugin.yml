@@ -1,0 +1,31 @@
+name: SunPlayer
+version: '0.12.9'
+main: com.sunplayer.SunPlayerPlugin
+api-version: '1.21'
+folia-supported: true
+description: Carpet-style fake players for Folia
+author: SunPlayer
+commands:
+  sunplayer:
+    description: SunPlayer fake player command
+    usage: /sunplayer <name> [carpet command]
+  pvpbot:
+    description: 生成只追你的 PVP 机器人（死亡不再重生）
+    usage: /pvpbot [1-4|kill]
+permissions:
+  sunplayer.use:
+    description: 生成假人、对假人发动作、remove/kill、renew、skin、生成 PVP 机器人（/pvpbot）、list
+    default: true
+  sunplayer.invsee:
+    description: 用箱子界面打开假人的物品栏（仍限主人或管理员）
+    default: true
+  sunplayer.npc:
+    description: 使用 NPC 模式（--npcmode 等全部 -- 参数）
+    default: op
+  sunplayer.admin:
+    description: 完整权限节点，另外允许给别人的假人续时、/sunplayer reload
+    default: op
+    children:
+      sunplayer.use: true
+      sunplayer.invsee: true
+      sunplayer.npc: true
