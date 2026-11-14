@@ -19,8 +19,12 @@ import java.util.Locale;
  * <pre>
  * /pvpbot             generate pvpbot_1 (difficulty 1, easy) where the sender stands
  * /pvpbot &lt;1-4&gt;       same, with that difficulty
+ * /pvpbot &lt;1-4&gt; --noely   never use an elytra, even if the owner's gear has one
  * /pvpbot kill        delete every bot the sender created
  * </pre>
+ *
+ * <p>{@code --noely} may be written before or after the difficulty; with no difficulty it
+ * applies to the default one.
  *
  * <p>The name is not typed by the player: bots are numbered {@code pvpbot_1}, {@code pvpbot_2}, …
  * one past the highest number that already exists, and the configured prefix makes them
@@ -39,6 +43,12 @@ public final class PvpBotCommand implements CommandExecutor, TabCompleter {
     private static final String PERM_USE = "sunplayer.use";
 
     private static final List<String> OPTIONS = List.of("1", "2", "3", "4", "kill");
+
+    /** The one flag {@code /pvpbot} understands: no elytra, whatever the owner is carrying. */
+    private static final String FLAG_NO_ELYTRA = "--noely";
+
+    /** Tab-completable flags, offered on every argument position that is not the first. */
+    private static final List<String> FLAGS = List.of(FLAG_NO_ELYTRA);
 
     /** `/pvpbot` with no argument: the easiest difficulty, so one command is enough to get a fight. */
     private static final PvpMode.Difficulty DEFAULT = PvpMode.Difficulty.EASY;
@@ -63,21 +73,47 @@ public final class PvpBotCommand implements CommandExecutor, TabCompleter {
             killOwn(sender);
             return true;
         }
+        // Everything that is not a flag and not "kill" is the difficulty, at most once.
+        String difficultyArg = null;
+        boolean noElytra = false;
+        for (String raw : args) {
+            String arg = raw == null ? "" : raw.trim();
+            if (arg.isEmpty()) {
+                continue;
+            }
+            if (arg.equalsIgnoreCase(FLAG_NO_ELYTRA)) {
+                noElytra = true;
+                continue;
+            }
+            if (arg.startsWith("--")) {
+                sender.sendMessage(PREFIX + "不认识的参数: " + arg);
+                sender.sendMessage(PREFIX + "用法: /pvpbot [1-4] [" + FLAG_NO_ELYTRA + "] 或 /pvpbot kill");
+                return true;
+            }
+            if (difficultyArg != null) {
+                sender.sendMessage(PREFIX + "难度只能写一个（收到 " + difficultyArg + " 和 " + arg + "）。");
+                sender.sendMessage(PREFIX + "用法: /pvpbot [1-4] [" + FLAG_NO_ELYTRA + "]");
+                return true;
+            }
+            difficultyArg = arg;
+        }
         PvpMode.Difficulty difficulty;
         try {
-            difficulty = first.isBlank() ? DEFAULT : PvpMode.Difficulty.parse(first);
+            difficulty = difficultyArg == null || difficultyArg.isBlank()
+                    ? DEFAULT : PvpMode.Difficulty.parse(difficultyArg);
         } catch (IllegalArgumentException e) {
             sender.sendMessage(PREFIX + e.getMessage());
-            sender.sendMessage(PREFIX + "用法: /pvpbot [1-4] 或 /pvpbot kill（1=新手 2=入门 3=资深 4=极限，不填=1）");
+            sender.sendMessage(PREFIX + "用法: /pvpbot [1-4] [" + FLAG_NO_ELYTRA + "] 或 /pvpbot kill"
+                    + "（1=新手 2=入门 3=资深 4=极限，不填=1）");
             return true;
         }
-        spawn(sender, difficulty);
+        spawn(sender, difficulty, noElytra);
         return true;
     }
 
     // ------------------------------------------------------------------- spawn
 
-    private void spawn(CommandSender sender, PvpMode.Difficulty difficulty) {
+    private void spawn(CommandSender sender, PvpMode.Difficulty difficulty, boolean noElytra) {
         Player player = resolvePlayer(sender);
         FakePlayerManager.Owner owner = FakePlayerManager.ownerOf(sender);
         if (player == null || owner == null) {
@@ -114,14 +150,18 @@ public final class PvpBotCommand implements CommandExecutor, TabCompleter {
 
         Location loc = player.getLocation();
         GameType gameType = FakePlayerManager.gameTypeOf(player);
-        sender.sendMessage(PREFIX + "正在生成 " + name + "（难度 " + difficulty.display() + "）…");
-        this.manager.createPvpBotAsync(sender, name, loc, gameType, difficulty, () -> {
+        sender.sendMessage(PREFIX + "正在生成 " + name + "（难度 " + difficulty.display()
+                + (noElytra ? "，禁用鞘翅" : "") + "）…");
+        this.manager.createPvpBotAsync(sender, name, loc, gameType, difficulty, noElytra, () -> {
             if (!this.manager.isOnlineFake(name)) {
                 sender.sendMessage(PREFIX + "生成失败，详见控制台。");
                 return;
             }
             sender.sendMessage(PREFIX + "已生成 " + name + "（服务端名 " + profile + "），只追 "
                     + player.getName() + "；装备复制你当前的背包");
+            if (noElytra) {
+                sender.sendMessage(PREFIX + "  已禁用鞘翅：不会继承、也不会装备鞘翅，你飞在天上时它在地面躲");
+            }
             sender.sendMessage(PREFIX + "  死亡不掉落、不再重生；/pvpbot kill 删除你的所有机器人");
         });
     }
@@ -182,14 +222,39 @@ public final class PvpBotCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                       @NotNull String alias, String[] args) {
         try {
-            if (args == null || args.length != 1 || args[0] == null || !sender.hasPermission(PERM_USE)) {
+            if (args == null || args.length == 0 || args.length > 3
+                    || !sender.hasPermission(PERM_USE)) {
                 return List.of();
             }
-            String typed = args[0].toLowerCase(Locale.ROOT);
+            String typed = args[args.length - 1] == null ? "" : args[args.length - 1].toLowerCase(Locale.ROOT);
             List<String> out = new ArrayList<>();
-            for (String option : OPTIONS) {
-                if (option.startsWith(typed)) {
-                    out.add(option);
+            if (args.length == 1) {
+                for (String option : OPTIONS) {
+                    if (option.startsWith(typed)) {
+                        out.add(option);
+                    }
+                }
+                // "/pvpbot --n" works: the flag is allowed without a difficulty.
+                if (!typed.startsWith("-") || typed.isEmpty()) {
+                    for (String flag : FLAGS) {
+                        if (flag.startsWith(typed)) {
+                            out.add(flag);
+                        }
+                    }
+                }
+            } else {
+                // Later positions only offer the flags that were not typed yet.
+                for (String flag : FLAGS) {
+                    boolean used = false;
+                    for (int i = 0; i < args.length - 1; i++) {
+                        if (flag.equalsIgnoreCase(args[i])) {
+                            used = true;
+                            break;
+                        }
+                    }
+                    if (!used && flag.startsWith(typed)) {
+                        out.add(flag);
+                    }
                 }
             }
             return out;

@@ -1452,13 +1452,23 @@ public final class FakePlayerManager {
      */
     public void createPvpBotAsync(CommandSender sender, String name, Location loc, GameType gameType,
                                   PvpMode.Difficulty difficulty, Runnable onDone) {
+        createPvpBotAsync(sender, name, loc, gameType, difficulty, false, onDone);
+    }
+
+    /**
+     * @param noElytra {@code /pvpbot ... --noely}: the bot must never glide, so it neither inherits
+     *                 the owner's elytra nor equips one. Persisted in the {@code pvp} field, see
+     *                 {@link #PVP_NO_ELYTRA}.
+     */
+    public void createPvpBotAsync(CommandSender sender, String name, Location loc, GameType gameType,
+                                  PvpMode.Difficulty difficulty, boolean noElytra, Runnable onDone) {
         createAsync(sender, name, loc, gameType, () -> {
             try {
                 FakePlayer fake = get(name);
                 if (fake != null) {
                     // A bot's gear is a copy of the owner's; nothing may carry it back out.
                     fake.pvpBot(true);
-                    fake.actions().pvp(difficulty);
+                    fake.actions().pvp(difficulty, true, noElytra);
                     // createHere already saved an entry, but at that point PVP mode did not exist
                     // yet, so its "pvp" field is 0. Rewrite it now that the difficulty is known,
                     // otherwise a restart would bring the bot back as an idle fake.
@@ -1570,11 +1580,13 @@ public final class FakePlayerManager {
                 }
                 // A /pvpbot bot is saved with its difficulty: bring it back fighting, not standing.
                 if (entry.pvp() > 0) {
-                    PvpMode.Difficulty difficulty = PvpMode.Difficulty.of(entry.pvp());
+                    // The saved value may also carry PVP_NO_ELYTRA; the low byte is the difficulty.
+                    boolean noElytra = (entry.pvp() & PVP_NO_ELYTRA) != 0;
+                    PvpMode.Difficulty difficulty = PvpMode.Difficulty.of(entry.pvp() & 0xFF);
                     fake.pvpBot(true);
-                    fake.actions().pvp(difficulty);
+                    fake.actions().pvp(difficulty, true, noElytra);
                     this.plugin.getLogger().info("已恢复 PVP 机器人 " + entry.name() + "（难度 "
-                            + difficulty.display() + "，目标 "
+                            + difficulty.display() + (noElytra ? "，禁用鞘翅" : "") + "，目标 "
                             + (fake.ownerName() == null ? "?" : fake.ownerName()) + "）");
                 } else {
                     this.plugin.getLogger().info("已恢复假人 " + entry.name());
@@ -2271,10 +2283,24 @@ public final class FakePlayerManager {
         );
     }
 
-    /** PVP 难度 1-4 for a bot, {@code 0} for a fake that is not fighting. Stored in the save file. */
+    /**
+     * Bit set in a saved {@code pvp} value when the bot was created with {@code --noely}.
+     *
+     * <p>The low byte stays the difficulty (1-4), so an entry written by an older version reads
+     * back unchanged. Packing the flag here avoids a new column in {@link FakePlayerStore.Entry}
+     * and keeps old save files valid without migration.
+     */
+    public static final int PVP_NO_ELYTRA = 0x100;
+
+    /**
+     * PVP 难度 1-4 for a bot, {@code 0} for a fake that is not fighting. Stored in the save file.
+     *
+     * <p>When the bot was created with {@code --noely} the {@link #PVP_NO_ELYTRA} bit is OR-ed in,
+     * so a restart brings the bot back without an elytra.
+     */
     public static int pvpLevelOf(FakePlayer fake) {
         PvpMode mode = fake.actions().pvpMode();
-        return mode == null ? 0 : mode.difficulty().number();
+        return mode == null ? 0 : mode.savedPvpValue();
     }
 
     /** Name for display, logging and the store: always the bare one. */

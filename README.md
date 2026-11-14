@@ -54,7 +54,7 @@
 | `/sunplayer list` | 查看所有在线假人与 NPC |
 | `/sunplayer reload` | 重载配置文件 |
 | `/sunplayer revive` | 恢复没有成功上线的假人 |
-| `/pvpbot [<等级(1~4)> \| kill]` | 创建 pvp 机器人（会继承你的装备）；`kill` 杀死所有 pvp 机器人 |
+| `/pvpbot [<等级(1~4)>] [--noely] \| kill` | 创建 pvp 机器人（会继承你的装备）；加 `--noely` 不用鞘翅；`kill` 杀死所有 pvp 机器人 |
 
 命令里只写名字本身就行，不用管前缀。
 
@@ -120,6 +120,32 @@
 命令里的 `@s` 指向点击者本人，坐标和朝向也是他的。
 
 NPC 不会移动、不会受伤、不占玩家位。参数在创建后无法修改，要改就先 `kill` 再重建。
+
+---
+
+## PvP 机器人
+
+```
+/pvpbot             生成 1 级机器人
+/pvpbot 3           生成 3 级机器人
+/pvpbot 2 --noely   生成 2 级机器人，不用鞘翅
+/pvpbot kill        删除你的所有机器人
+```
+
+机器人会复制你当前的背包（包括盔甲），只追你一个人，死亡不掉落、不再重生。你退出服务器时它们跟着下线，重新 `/pvpbot` 即可。
+
+### `--noely`：不用鞘翅
+
+默认情况下机器人会继承你背包里的鞘翅，你飞在天上时它也会起飞追你。加上 `--noely` 之后：
+
+- 不继承你背包里任何位置的鞘翅（不只是胸甲槽）
+- 不会自己把鞘翅穿到胸甲槽
+- 被人手动塞了鞘翅也会立刻脱掉
+- 你飞在天上时，它改为在地面横向躲闪，并用风弹把你打下来
+
+`--noely` 可以和等级以任意顺序写，也可以不写等级：`/pvpbot --noely` 就是 1 级不用鞘翅。
+
+这个状态会存进存档，重启后机器人还是不用鞘翅。
 
 ---
 
@@ -252,7 +278,7 @@ A fake player named Steve spawns at your feet, using your current game mode.
 | `/sunplayer list` | List all online fake players and NPCs |
 | `/sunplayer reload` | Reload the config file |
 | `/sunplayer revive` | Recover fake players that failed to come online |
-| `/pvpbot [<tier(1~4)> \| kill]` | Create a PvP bot (inherits your gear); `kill` removes all PvP bots |
+| `/pvpbot [<tier(1~4)>] [--noely] \| kill` | Create a PvP bot (inherits your gear); `--noely` disables the elytra; `kill` removes all PvP bots |
 
 Just write the plain name in commands, you don't need to worry about prefixes.
 
@@ -319,6 +345,32 @@ Examples:
 `@s` in the command refers to the player who clicked, and coordinates and direction are theirs too.
 
 NPCs don't move, don't take damage, and don't occupy a player slot. Parameters can't be edited after creation; to change them, `kill` and recreate.
+
+---
+
+## PvP Bots
+
+```
+/pvpbot             spawn a tier 1 bot
+/pvpbot 3           spawn a tier 3 bot
+/pvpbot 2 --noely   tier 2, no elytra
+/pvpbot kill        remove all of your bots
+```
+
+A bot copies your current inventory (armour included), chases only you, drops nothing on death, and never respawns. Bots leave when you disconnect; run `/pvpbot` again to get a new one.
+
+### `--noely`: no elytra
+
+By default a bot inherits whatever elytra you carry and will take off to chase you in the air. With `--noely` it:
+
+- does not inherit an elytra from any inventory slot (not just the chest slot)
+- never moves one onto its own chest slot
+- drops an elytra immediately if anything puts one on it
+- dodges sideways on the ground and knocks you out of the sky with a wind charge instead of chasing
+
+`--noely` works before or after the tier, and with no tier: `/pvpbot --noely` is a tier 1 bot without an elytra.
+
+The flag is saved with the bot, so it still refuses the elytra after a restart.
 
 ---
 

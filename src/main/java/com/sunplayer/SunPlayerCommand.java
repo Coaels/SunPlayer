@@ -838,9 +838,11 @@ public final class SunPlayerCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(PREFIX + "  /sunplayer <名字> remove             下线（重启会回来）");
         sender.sendMessage(PREFIX + "  /sunplayer <名字> kill               彻底删除");
         sender.sendMessage(PREFIX + "  /sunplayer <名字> skin <正版玩家名>  换皮肤（不填名字=恢复默认）");
-        sender.sendMessage(PREFIX + "  /pvpbot [1-4]                        生成 PVP 机器人 pvpbot_1/2/3…"
+        sender.sendMessage(PREFIX + "  /pvpbot [1-4] [--noely]              生成 PVP 机器人 pvpbot_1/2/3…"
                 + "（只追你，1 新手 2 入门 3 资深 4 极限，不填=1）");
         sender.sendMessage(PREFIX + "  /pvpbot kill                         删除你的所有 PVP 机器人");
+        sender.sendMessage(PREFIX + "  --noely                              不用鞘翅：不继承主人背包里的鞘翅，"
+                + "你飞在天上时它在地面躲");
         sender.sendMessage(PREFIX + "  机器人不归 /sunplayer 管：动作 / invsee / kill 都要用 /pvpbot；"
                 + "被击杀后不掉落、不再重生");
         if (sender.hasPermission(PERM_INVSEE)) {

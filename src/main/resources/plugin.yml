@@ -1,5 +1,5 @@
 name: SunPlayer
-version: '0.12.9'
+version: '0.13.0'
 main: com.sunplayer.SunPlayerPlugin
 api-version: '1.21'
 folia-supported: true
@@ -11,7 +11,7 @@ commands:
     usage: /sunplayer <name> [carpet command]
   pvpbot:
     description: 生成只追你的 PVP 机器人（死亡不再重生）
-    usage: /pvpbot [1-4|kill]
+    usage: /pvpbot [1-4] [--noely]|kill
 permissions:
   sunplayer.use:
     description: 生成假人、对假人发动作、remove/kill、renew、skin、生成 PVP 机器人（/pvpbot）、list

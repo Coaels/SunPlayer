@@ -336,6 +336,12 @@ public final class PvpMode {
     private final UUID ownerId;
     private final String ownerName;
     private final RandomSource random;
+    /**
+     * {@code /pvpbot ... --noely}: never glide. The bot does not inherit the owner's elytra and
+     * {@link #equipGlider()} refuses to put one on, so an airborne owner is met with ground
+     * dodging ({@link #dodgeAerial()}) instead of a chase.
+     */
+    private final boolean noElytra;
 
     /** The owner's server-side player, or {@code null} when not reachable this sense pass. */
     private Player owner;
@@ -461,12 +467,18 @@ public final class PvpMode {
 
     PvpMode(FakePlayer player, ActionPack actions, Difficulty difficulty, UUID ownerId, String ownerName,
             boolean inheritOwner) {
+        this(player, actions, difficulty, ownerId, ownerName, inheritOwner, false);
+    }
+
+    PvpMode(FakePlayer player, ActionPack actions, Difficulty difficulty, UUID ownerId, String ownerName,
+            boolean inheritOwner, boolean noElytra) {
         this.player = player;
         this.actions = actions;
         this.difficulty = difficulty;
         this.ownerId = ownerId;
         this.ownerName = ownerName;
         this.inheritOwner = inheritOwner;
+        this.noElytra = noElytra;
         this.random = player.getRandom();
         this.loadout = new ItemStack[INVENTORY_SLOTS];
         for (int slot = 0; slot < INVENTORY_SLOTS; slot++) {
@@ -481,6 +493,19 @@ public final class PvpMode {
 
     public Difficulty difficulty() {
         return this.difficulty;
+    }
+
+    /** Whether this bot was created with {@code --noely}: it never inherits or wears an elytra. */
+    public boolean noElytra() {
+        return this.noElytra;
+    }
+
+    /**
+     * The value stored in the {@code pvp} field of the save file: difficulty in the low byte, the
+     * no-elytra flag in {@link FakePlayerManager#PVP_NO_ELYTRA}.
+     */
+    public int savedPvpValue() {
+        return this.difficulty.number() | (this.noElytra ? FakePlayerManager.PVP_NO_ELYTRA : 0);
     }
 
     /** Whether a shield (anything with the block-attacks component) is in either hand right now. */
@@ -869,6 +894,12 @@ public final class PvpMode {
                 var to = this.player.getBukkitEntity().getInventory();
                 for (int slot = 0; slot < INVENTORY_SLOTS; slot++) {
                     org.bukkit.inventory.ItemStack stack = from.getItem(slot);
+                    if (this.noElytra && isElytraSlot(stack)) {
+                        // --noely: whatever the owner wears or carries, the bot gets no elytra,
+                        // so it cannot glide even after a respawn puts the loadout back.
+                        to.setItem(slot, null);
+                        continue;
+                    }
                     if (stack == null || stack.isEmpty()) {
                         to.setItem(slot, null);
                     } else {
@@ -880,7 +911,8 @@ public final class PvpMode {
                 inherited = true;
                 if (FakeConnection.debugMessages) {
                     Bukkit.getLogger().info("[SunPlayer][debug] 假人 " + this.player.getGameProfile().name()
-                            + " 继承了主人 " + this.ownerName + " 的物品 " + copied + " 件（含盔甲）");
+                            + " 继承了主人 " + this.ownerName + " 的物品 " + copied + " 件（含盔甲）"
+                            + (this.noElytra ? "，已跳过鞘翅" : ""));
                 }
             }
         } catch (Throwable t) {
@@ -892,6 +924,27 @@ public final class PvpMode {
         }
         this.snapshotInventory();
         return inherited;
+    }
+
+    /**
+     * Whether this stack is a glider that {@code --noely} must not hand over.
+     *
+     * <p>Every slot counts, not just the chest slot: the owner's elytra normally sits in a hotbar
+     * or backpack slot (that is where {@code /give} puts it), and {@link #equipGlider()} would move
+     * it onto the chest at the first sign of a flying owner. Filtering it at the copy step is what
+     * makes the bot unable to glide even after a respawn restores the loadout.
+     */
+    private static boolean isElytraSlot(org.bukkit.inventory.ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        try {
+            return LivingEntity.canGlideUsing(org.bukkit.craftbukkit.inventory.CraftItemStack
+                    .asNMSCopy(stack), EquipmentSlot.CHEST);
+        } catch (Throwable t) {
+            // CraftItemStack not reachable: fall back to a plain type check.
+            return stack.getType() == org.bukkit.Material.ELYTRA;
+        }
     }
 
     /** Remembers the fake's current inventory as the loadout that a respawn restores. */
@@ -1581,6 +1634,15 @@ public final class PvpMode {
         }
         boolean hasGlider = LivingEntity.canGlideUsing(
                 this.player.getItemBySlot(EquipmentSlot.CHEST), EquipmentSlot.CHEST);
+        if (this.noElytra) {
+            // --noely is absolute: an elytra put on the bot by hand (or left over from before the
+            // flag existed) is taken off, so the bot never takes off no matter where it came from.
+            if (hasGlider) {
+                this.stripElytra();
+            }
+            this.dodgeAerial();
+            return;
+        }
         if (!hasGlider) {
             // An elytra sitting anywhere in the inventory is worth nothing: the glide check only
             // looks at the equipment slots. Put it on the chest before giving up on flight.
@@ -1629,6 +1691,11 @@ public final class PvpMode {
      * @return {@code true} when the chest slot now holds something that can glide
      */
     private boolean equipGlider() {
+        if (this.noElytra) {
+            // --noely: never take an elytra out of the inventory. The caller falls through to
+            // dodgeAerial(), so an airborne owner is met on the ground rather than chased.
+            return false;
+        }
         try {
             var inventory = this.player.getInventory();
             for (int slot = 0; slot < 36; slot++) {
@@ -1650,6 +1717,42 @@ public final class PvpMode {
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /**
+     * Takes a glider off the chest slot for {@code --noely} and stops any glide in progress.
+     *
+     * <p>Also clears the firework / wind-charge cooldowns: after this the bot is a ground fighter,
+     * and a leftover cooldown would only delay its next dodge.
+     */
+    private void stripElytra() {
+        try {
+            ItemStack chest = this.player.getItemBySlot(EquipmentSlot.CHEST);
+            if (chest.isEmpty()) {
+                return;
+            }
+            // Put the item back in the first free inventory slot instead of deleting it.
+            var inventory = this.player.getInventory();
+            boolean returned = false;
+            for (int slot = 0; slot < 36; slot++) {
+                if (inventory.getItem(slot).isEmpty()) {
+                    inventory.setItem(slot, chest.copy());
+                    returned = true;
+                    break;
+                }
+            }
+            this.player.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
+            if (this.gliding) {
+                this.gliding = false;
+                this.player.stopFallFlying();
+            }
+            this.switchCooldown = Math.max(this.switchCooldown, 6);
+            if (FakeConnection.debugMessages) {
+                Bukkit.getLogger().info("[SunPlayer][debug] 假人 " + this.player.getGameProfile().name()
+                        + " pvp 禁用鞘翅：已脱下胸甲槽的滑翔物（放回背包: " + returned + "）");
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**

@@ -213,9 +213,16 @@ public final class ActionPack {
      *                     already in place and must not be overwritten by an empty owner inventory
      */
     public PvpMode pvp(PvpMode.Difficulty difficulty, boolean inheritOwner) {
+        return pvp(difficulty, inheritOwner, false);
+    }
+
+    /**
+     * @param noElytra {@code /pvpbot ... --noely}: the bot never inherits or equips an elytra
+     */
+    public PvpMode pvp(PvpMode.Difficulty difficulty, boolean inheritOwner, boolean noElytra) {
         this.stop();
         PvpMode mode = new PvpMode(this.player, this, difficulty,
-                this.player.ownerId(), this.player.ownerName(), inheritOwner);
+                this.player.ownerId(), this.player.ownerName(), inheritOwner, noElytra);
         this.pvp = mode;
         this.player.markActionsDirty();
         return mode;

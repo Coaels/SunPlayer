@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.sunplayer"
-version = "0.12.9"
+version = "0.13.0"
 
 repositories {
     mavenCentral()
