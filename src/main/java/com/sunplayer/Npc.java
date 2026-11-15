@@ -151,6 +151,10 @@ public final class Npc {
     /** Removes the entity. Must run on the region that owns it. */
     void despawn() {
         if (this.entity.isValid()) {
+            // Mannequins are rideable (/ride), and removing a vehicle does not dismount its
+            // passengers: the rider is left standing on a ghost, frozen in the air and unable to
+            // move until it relogs. Ejecting first also lets the server clear the rider's client.
+            this.entity.eject();
             this.entity.remove();
         }
     }

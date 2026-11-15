@@ -216,6 +216,9 @@ compat:
 **假人会跟同名真人冲突吗？**
 不会。假人在服务端有独立名字，与同名真人完全隔离。
 
+**骑在假人身上的玩家/生物，假人被删掉后会卡住吗？**
+不会。删除假人（或 NPC）前会先把骑乘关系拆干净：骑乘者正常下车、自己骑的东西也会先下来，所以不会出现「悬空、动不了、只能重进」的情况。
+
 ---
 
 ---
@@ -440,3 +443,6 @@ Run `/sunplayer list`; unrecovered fake player names are listed at the bottom. T
 
 **Will a fake player conflict with a real player of the same name?**
 No. The fake player has its own separate server-side name and is fully isolated from real players with the same name.
+
+**What happens to a player or mob riding a fake player when it is deleted?**
+It is dismounted first. Both directions are torn down before the fake player (or NPC) is removed — riders get off, and whatever the fake was riding is left clean — so nobody is left hanging in mid-air, unable to move until they relog.

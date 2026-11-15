@@ -18,6 +18,7 @@ import net.minecraft.server.level.ParticleStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.ChatVisiblity;
 import net.minecraft.world.item.ItemStack;
@@ -999,6 +1000,8 @@ public final class FakePlayerManager {
             this.requestSave();
             this.plugin.getLogger().warning("NPC " + name + " 不在在线列表里但实体还在，直接移除");
             ServerCompat.runAt(this.plugin, orphan.getLocation(), () -> {
+                // Same reason as Npc#despawn: never remove a vehicle out from under a rider.
+                orphan.eject();
                 orphan.remove();
                 this.finish(onDone);
             });
@@ -1188,6 +1191,9 @@ public final class FakePlayerManager {
 
     private void detachNow(FakePlayer fake, String name, int attempt, Runnable onDone) {
         try {
+            // Runs before anything else, and also when the entity is already gone: the ride links
+            // are plain fields and still have to be broken (see dismountRiders).
+            this.dismountRiders(name, fake);
             if (fake.isRemoved()) {
                 // The entity is already gone (killed and discarded by the server, or removed by
                 // another plugin) but the player list can still hold it. Leaving that entry behind
@@ -1234,6 +1240,50 @@ public final class FakePlayerManager {
             }
         }
         this.finish(onDone);
+    }
+
+    /**
+     * Breaks every ride link around a fake before it leaves the world.
+     *
+     * <p>Removing a {@link ServerPlayer} does not dismount it, and nothing dismounts its riders
+     * either. Vanilla's automatic repair lives in {@code ServerLevel#tickPassenger}, which only
+     * runs for entities in the entity tick list; real players are ticked by
+     * {@code ServerPlayer#doTick} instead, and an entity that is already removed is never ticked
+     * again. So a rider left behind (a player, a pig, another fake) stays flagged as a passenger
+     * of an entity that no longer exists:
+     * <ul>
+     *   <li>the server stops applying gravity and ignores the rider's movement packets, so the
+     *       rider hangs in mid-air where the vehicle was and cannot move — only a relog fixes it;</li>
+     *   <li>the rider's client is never told, so its camera keeps following the ghost vehicle.</li>
+     * </ul>
+     * {@code stopRiding()} is the vanilla dismount, and the resulting passenger-list change makes
+     * the server broadcast an empty {@code ClientboundSetPassengersPacket}, which is exactly what
+     * clears the rider's client. Must run on the region that owns the entity.
+     */
+    private void dismountRiders(String name, Entity fake) {
+        List<Entity> riders = new ArrayList<>(fake.getPassengers());
+        boolean riding = fake.isPassenger();
+        if (riders.isEmpty() && !riding) {
+            return;
+        }
+        try {
+            for (Entity rider : riders) {
+                rider.stopRiding();
+            }
+            if (riding) {
+                fake.stopRiding();
+            }
+            StringBuilder what = new StringBuilder();
+            if (!riders.isEmpty()) {
+                what.append("身上还骑着 ").append(riders.size()).append(" 个实体");
+            }
+            if (riding) {
+                what.append(what.isEmpty() ? "" : "，").append("自己正骑着别的实体");
+            }
+            this.plugin.getLogger().info("假人 " + name + " " + what + "，移除前已全部下车");
+        } catch (Throwable t) {
+            this.plugin.getLogger().warning("假人 " + name + " 的骑乘关系无法拆除: " + t);
+        }
     }
 
     /** Drops the player from the server player list (tab entry, {@code /tp} resolution, broadcasts). */
