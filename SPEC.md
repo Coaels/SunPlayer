@@ -2514,3 +2514,38 @@ pvp = difficulty | (noElytra ? PVP_NO_ELYTRA : 0)   // PVP_NO_ELYTRA = 0x100
 
 ### 46.5 为什么不在 `mount` 里禁止骑玩家
 `mount` 只是动作，玩家想骑就骑。真正的问题是「删载具时没收拾干净」，所以在删除路径上修；这样无论乘客是玩家、生物还是另一个假人，也不管载具是被 `kill`、被 `remove-on-death` 还是被别的插件删掉，都会先下车。
+
+## 47. 皮肤查询：429 不再被当成「没有这个正版玩家」（0.13.2）
+
+### 47.1 现象
+`/sunplayer <名字> skin <正版玩家名>` 偶尔回答「找不到正版玩家 xxx 的皮肤」，但那个账号确实存在，把名字重打一遍有时又能成功。同一次操作偶尔会卡上一两秒才失败。
+
+### 47.2 原因
+`SkinResolver` 只有一条路：`get()` 里 `statusCode != 200` 一律 `return null`，而 `null` 的含义是「查无此人」—— 于是「接口没答」和「账号不存在」被压成了同一个值。
+
+实测 `https://api.mojang.com/users/profiles/minecraft/<name>` 对同一 IP 会成片返回 **429**（同一秒内连续请求，约一半被挡；无 `Retry-After` 头），偶发 **403**，另外 `connectTimeout` 5 秒也可能直接超时。这些全部被翻译成了「没有这个玩家」。
+
+### 47.3 修复
+`SkinResolver` 改成三态返回 `Lookup(skin, status, detail)`：
+
+| status | 含义 | 命令怎么说 |
+|---|---|---|
+| `FOUND` | 拿到 textures | 正常换皮肤 |
+| `NOT_FOUND` | HTTP 204 / 404 / 没 textures | 「找不到正版玩家 …」（原来那句） |
+| `ERROR` | 429、403、5xx、超时、JSON 坏了 | 「查询失败（Mojang 接口限流或超时，不是名字的问题），稍等几秒再试一次」 |
+
+配套：
+- **重试**：429 / 403 / 5xx / 连接失败按 800→1600→3200ms 退避重试（带抖动，有 `Retry-After` 就用它）
+- **两档耐心**：`lookup()`（生成/复活走这条，4 次，约 6.5 秒封顶）与 `ATTEMPTS_INTERACTIVE = 6`（`skin` 命令，约 14 秒）—— 玩家愿意等，生成不该等
+- **缓存**：`FOUND` 30 分钟、`NOT_FOUND` 2 分钟，`ERROR` 不缓存（下次立刻重试）；上限 512 条，超了整表清空
+- **日志**：失败打 INFO（带具体原因，如 `Mojang 返回 HTTP 429`）；换成功后打 INFO `已把 X 的皮肤换成 Y（操作者 Z）`
+- 控制台 sender 的异步回包会被 Paper 丢弃（`RemoteConsoleCommandSender` 只在派发命令时 flush），所以换了成功/失败都写一行日志，RCON 里看不到时去日志确认
+
+### 47.4 实测（Paper 1.21.11）
+| 场景 | 结果 |
+|---|---|
+| `curl` 连续请求同一接口 | 200 / 429 交替出现，约一半被挡，无 `Retry-After` |
+| 正常网络下 6 个真实账号（Notch、jeb_、Dinnerbone、Grumm、Marc、Athion 不存在） | 存在的全部换上并写入 `skin:`；Athion 正确报「找不到正版玩家」 |
+| 一边用 curl 每 30ms 打接口、一边执行 `/sunplayer SkinFake skin Notch` | 6 次重试后成功：日志 `已把 SkinFake 的皮肤换成 Notch（操作者 Rcon）`，`skin: Notch` 落盘 |
+| 旧版本的同一时刻 | 直接报「找不到正版玩家 Notch」 |
+| Folia 1.21.11 | 同样成功，`skin: jeb_` 落盘，无异常 |

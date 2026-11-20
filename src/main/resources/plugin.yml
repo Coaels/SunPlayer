@@ -1,5 +1,5 @@
 name: SunPlayer
-version: '0.13.1'
+version: '0.13.2'
 main: com.sunplayer.SunPlayerPlugin
 api-version: '1.21'
 folia-supported: true

@@ -219,6 +219,9 @@ compat:
 **骑在假人身上的玩家/生物，假人被删掉后会卡住吗？**
 不会。删除假人（或 NPC）前会先把骑乘关系拆干净：骑乘者正常下车、自己骑的东西也会先下来，所以不会出现「悬空、动不了、只能重进」的情况。
 
+**换皮肤偶尔提示「找不到正版玩家」，可这个人明明存在？**
+这是 Mojang 接口限流，不是名字写错了。`api.mojang.com` 对同一 IP 会间歇性返回 429（实测有时一半请求都被挡），旧版本把它当成「查无此人」直接报错。现在会自动退避重试（换皮肤最多等约 14 秒），仍然失败时会明确说「接口限流或超时，稍后再试」，不会再冤枉正确的名字。查询成功的结果会缓存 30 分钟，所以连续换同一个名字不会反复打接口。
+
 ---
 
 ---
@@ -446,3 +449,6 @@ No. The fake player has its own separate server-side name and is fully isolated 
 
 **What happens to a player or mob riding a fake player when it is deleted?**
 It is dismounted first. Both directions are torn down before the fake player (or NPC) is removed — riders get off, and whatever the fake was riding is left clean — so nobody is left hanging in mid-air, unable to move until they relog.
+
+**Changing the skin sometimes says "no such premium player" for an account that clearly exists?**
+That is Mojang rate-limiting, not a typo. `api.mojang.com` intermittently answers 429 for the same IP (about half the requests during a bad window), and older versions reported that as "no such player". Lookups now back off and retry (a skin change may wait up to ~14 s), and if they still fail the message says the API timed out or rate-limited — never that the name is wrong. Successful lookups are cached for 30 minutes, so repainting the same name does not hammer the API.

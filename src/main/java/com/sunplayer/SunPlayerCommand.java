@@ -501,17 +501,31 @@ public final class SunPlayerCommand implements CommandExecutor, TabCompleter {
         String requested = target;
         boolean reset = skinFrom == null || skinFrom.isBlank();
         sender.sendMessage(PREFIX + "正在查询 " + requested + " 的皮肤…");
-        SkinResolver.lookup(this.plugin, requested).thenAccept(skin -> {
-            if (skin == null || skin.value() == null) {
+        SkinResolver.lookupDetailed(this.plugin, requested, SkinResolver.ATTEMPTS_INTERACTIVE)
+                .thenAccept(lookup -> {
+            if (lookup.status() == SkinResolver.Status.ERROR) {
+                // "Mojang did not answer" is not the same as "no such player"; never claim the latter.
+                sender.sendMessage(PREFIX + "查询 " + requested + " 的皮肤失败（Mojang 接口限流或超时，"
+                        + "不是名字的问题）。稍等几秒再试一次，假人保持原样。");
+                return;
+            }
+            if (lookup.status() != SkinResolver.Status.FOUND || lookup.skin() == null) {
                 // A missing account is not an error worth touching the entity for.
                 sender.sendMessage(PREFIX + "找不到正版玩家 " + requested + " 的皮肤，"
                         + "假人保持原样（拼写和大小写要完全正确）。");
                 return;
             }
+            SkinResolver.Skin skin = lookup.skin();
             String stored = reset ? null : requested;
             switch (this.manager.applySkin(name, skin, stored)) {
-                case OK -> sender.sendMessage(PREFIX + "已把 " + name + " 的皮肤换成 "
-                        + requested + " 的" + (reset ? "（恢复默认）" : "") + "。");
+                case OK -> {
+                    // Logged as well as answered: the reply goes to whoever typed the command, which
+                    // may be a console that nobody is watching.
+                    this.plugin.getLogger().info("已把 " + name + " 的皮肤换成 " + requested
+                            + (reset ? "（恢复默认）" : "") + "（操作者 " + sender.getName() + "）");
+                    sender.sendMessage(PREFIX + "已把 " + name + " 的皮肤换成 "
+                            + requested + " 的" + (reset ? "（恢复默认）" : "") + "。");
+                }
                 case SAVED_OFFLINE -> sender.sendMessage(PREFIX + name + " 现在不在线，皮肤已记录，"
                         + "下次上线（或 /sunplayer revive）生效。");
                 case UNSUPPORTED -> sender.sendMessage(PREFIX + "换皮肤失败，详见控制台。");
